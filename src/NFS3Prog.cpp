@@ -464,6 +464,7 @@ nfsstat3 CNFS3Prog::ProcedureLOOKUP(void)
     dir_attributes.attributes_follow = GetFileAttributesForNFS((char*)dirName.c_str(), &dir_attributes.attributes);
 
     Write(&stat);
+	PrintLog("p: %p type: %d\n", &obj_attributes, obj_attributes.attributes.type);
 
     if (stat == NFS3_OK) {
         Write(&object);
@@ -650,30 +651,43 @@ nfsstat3 CNFS3Prog::ProcedureWRITE(void)
 
     file_wcc.before.attributes_follow = GetFileAttributesForNFS(path, &file_wcc.before.attributes);
 
-    if (stat == NFS3_OK) {       
-        errno_t errorNumber = fopen_s(&pFile, path, "r+b");
+    if (stat == NFS3_OK) { 
+		if (stable == UNSTABLE) {
+			nfs_fh3 handle;
+			GetFileHandle(path, &handle);
+			int handleId = *(unsigned int *)handle.contents;
+			unstableStorage[handleId].reserve(offset + data.length);
+			unstableStorage[handleId].insert(unstableStorage[handleId].begin() + (long)offset, data.contents, data.contents + data.length);
+			count = data.length;
+			verf = 0;
+		}
+		else {
+			errno_t errorNumber = fopen_s(&pFile, path, "r+b");
 
-        if (pFile != NULL) {
-            if (offset == 0) {
-                _chsize(_fileno(pFile), 0);
-            }
-            fseek(pFile, (long)offset, SEEK_SET);
-            count = fwrite(data.contents, sizeof(char), data.length, pFile);
-            fclose(pFile);
-        } else {
-            char buffer[BUFFER_SIZE];
-            strerror_s(buffer, BUFFER_SIZE, errorNumber);
-            PrintLog(buffer);
+			if (pFile != NULL) {
+				if (offset == 0) {
+					_chsize(_fileno(pFile), 0);
+				}
+				fseek(pFile, (long)offset, SEEK_SET);
+				count = fwrite(data.contents, sizeof(char), data.length, pFile);
+				fclose(pFile);
+			}
+			else {
+				char buffer[BUFFER_SIZE];
+				strerror_s(buffer, BUFFER_SIZE, errorNumber);
+				PrintLog(buffer);
 
-            if (errorNumber == 13) {
-                stat = NFS3ERR_ACCES;
-            } else {
-                stat = NFS3ERR_IO;
-            }
-        }
+				if (errorNumber == 13) {
+					stat = NFS3ERR_ACCES;
+				}
+				else {
+					stat = NFS3ERR_IO;
+				}
+			}
 
-        stable = FILE_SYNC;
-        verf = 0;
+			stable = FILE_SYNC;
+			verf = 0;
+		}
     }
 
     file_wcc.after.attributes_follow = GetFileAttributesForNFS(path, &file_wcc.after.attributes);
@@ -1335,8 +1349,42 @@ nfsstat3 CNFS3Prog::ProcedureCOMMIT(void)
 {
     //TODO
     PrintLog("COMMIT");
-    m_nResult = PRC_NOTIMP;
 
+	nfsstat3 stat;
+
+	nfs_fh3 file;
+	offset3 offset;
+	count3 count;
+	Read(&file);
+	Read(&offset);
+	Read(&count);
+
+	char* path = GetFilePath(file.contents);
+	int handleId = *(unsigned int*)file.contents;
+
+	wcc_data file_wcc;
+	file_wcc.before.attributes_follow = GetFileAttributesForNFS(path, &file_wcc.before.attributes);
+
+	FILE* pFile;
+
+	if (count == 0) {
+		count = unstableStorage[handleId].size();
+	}
+
+	fopen_s(&pFile, path, "r+b");
+	fseek(pFile, offset, SEEK_SET);
+	fwrite(&unstableStorage[handleId][offset], sizeof(char), count, pFile);
+	fclose(pFile);
+
+	file_wcc.after.attributes_follow = GetFileAttributesForNFS(path, &file_wcc.after.attributes);
+
+	stat = NFS3_OK;
+	Write(&stat);
+	Write(&file_wcc);
+	writeverf3 verf;
+	verf = 0;
+	Write(&verf);
+	
     return NFS3_OK;
 }
 

@@ -175,7 +175,7 @@ tree_node_<FILE_ITEM>* CFileTable::AddItem(char *path)
         memset(m_pLastTable, 0, sizeof(FILE_TABLE));
     }
 
-	//printf("\nAdd file %s for handle %i\n", path, *(unsigned int *)item.handle);
+	printf("\nAdd file %s for handle %i of length %i\n", path, *(unsigned int *)item.handle, item.nPathLen);
 
 	g_FileTree.AddItem(path, item.handle);
 	node = g_FileTree.FindFileItemForPath(path);

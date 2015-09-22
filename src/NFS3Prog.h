@@ -4,6 +4,8 @@
 #include "RPCProg.h"
 #include <string>
 #include <Windows.h>
+#include <map>
+#include <vector>
 
 typedef unsigned __int64 uint64;
 typedef unsigned long uint32;
@@ -223,6 +225,8 @@ typedef struct _REPARSE_DATA_BUFFER {
 	};
 } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
+typedef std::vector<char> UnstableStorageUnit;
+
 class CNFS3Prog : public CRPCProg
 {
     public:
@@ -297,6 +301,8 @@ class CNFS3Prog : public CRPCProg
     bool GetFileAttributesForNFS(char *path, wcc_attr *pAttr);
     bool GetFileAttributesForNFS(char *path, fattr3 *pAttr);
     LONGLONG FileTimeToPOSIX(FILETIME ft);
+
+	std::map<int, UnstableStorageUnit> unstableStorage;
 };
 
 #endif
